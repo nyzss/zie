@@ -75,11 +75,23 @@ char **zie_split_line(char *line) {
 void list_folders() {
   WIN32_FIND_DATA ffd;
   HANDLE file = FindFirstFile("*", &ffd);
-  printf("filename: %s\n", ffd.cFileName);
+  // printf("filename: %s\n", ffd.cFileName);
+  SYSTEMTIME fileTime;
+
+  char *formated_date = (char *)malloc(sizeof(char) * 24);
 
   while (FindNextFile(file, &ffd)) {
-    printf("filename: %s\n", ffd.cFileName);
+    FileTimeToSystemTime(&ffd.ftLastAccessTime, &fileTime);
+    int s_result = sprintf(formated_date, "%d %d %d:%d", fileTime.wDay,
+                           fileTime.wMonth, fileTime.wHour, fileTime.wMinute);
+    if (s_result < 0) {
+      fprintf(stderr, "zie: couldn't parse args");
+    }
+
+    printf("%s - %s\n", formated_date, ffd.cFileName);
   }
+
+  FindClose(file);
 }
 
 // the easy way lol
@@ -90,7 +102,6 @@ int zie_execute_args(char **args) {
     return 1;
   }
   if (strcmp(args[0], "ls") == 0) {
-    printf("files: \n");
     list_folders();
     return 1;
   }
@@ -99,10 +110,28 @@ int zie_execute_args(char **args) {
     return 1;
   }
 
-  // shellexecute approach, which works without issues lol
-  if (ShellExecute(NULL, "open", args[0], NULL, NULL, SW_HIDE)) {
-    return 1;
+  // TODO: crashes immediatly after launching a valid process (same happens if
+  // unvalid)
+  STARTUPINFO si;
+  PROCESS_INFORMATION pi;
+
+  ZeroMemory(&si, sizeof(si));
+  si.cb = sizeof(si);
+  ZeroMemory(&pi, sizeof(pi));
+
+  if (CreateProcess(NULL, args[0], NULL, NULL, FALSE, 0, NULL, NULL, &si,
+                    &pi) == TRUE) {
+    printf("pid: %lu\n", pi.dwProcessId);
   }
+
+  WaitForSingleObject(pi.hProcess, INFINITE);
+
+  CloseHandle(pi.hProcess);
+  CloseHandle(pi.hThread);
+  // shellexecute approach, which works without issues lol
+  // if (ShellExecute(NULL, "open", args[0], NULL, NULL, SW_HIDE)) {
+  //   return 1;
+  // }
   return 0;
 }
 
